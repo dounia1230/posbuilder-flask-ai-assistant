@@ -1,0 +1,18 @@
+[project]
+name = "flask-app"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "dounia1230",email = "douniaoaukil2004@gmail.com"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "openai (>=3.35.1,<4.0.0)",
+    "flask (==2.3.3)",
+    "dotenv (>=0.9.9,<0.10.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
