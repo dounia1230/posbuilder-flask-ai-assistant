@@ -128,6 +128,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     const exportFormat = document.querySelector("#export-format");
     const exportButton = document.querySelector("#export-conversation");
     const exportAllButton = document.querySelector("#export-all-conversations");
+    const documentForm = document.querySelector("#document-form");
+    const documentFile = document.querySelector("#document-file");
+    const summarizeButton = document.querySelector("#summarize-document");
     const status = document.querySelector("#conversation-status");
     let activeConversationId = null;
     let busy = false;
@@ -157,6 +160,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         newConversationButton.disabled = busy;
         specialtySelect.disabled = busy;
         savedConversations.disabled = busy;
+        documentFile.disabled = busy;
+        summarizeButton.disabled = busy || !documentFile.files.length;
         updateExportControls();
     }
 
@@ -226,6 +231,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         setActiveConversation(conversation.id);
         savedConversations.value = conversation.id;
         form.reset();
+        documentForm.reset();
         status.textContent = "Conversation chargée. Vous pouvez la continuer.";
     }
 
@@ -237,6 +243,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         savedConversations.value = "";
         document.querySelector("#gpt-output").replaceChildren();
         form.reset();
+        documentForm.reset();
+        summarizeButton.disabled = true;
         status.textContent = "Les messages seront enregistrés automatiquement.";
         form.elements.prompt.focus();
     }
@@ -305,6 +313,31 @@ document.addEventListener("DOMContentLoaded", async () => {
         await displayResponse(prompt, () => fetchPromptResponse(prompt, activeConversationId, specialtySelect.value));
     });
 
+    documentFile.addEventListener("change", () => {
+        summarizeButton.disabled = busy || !documentFile.files.length;
+    });
+
+    documentForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const file = documentFile.files[0];
+        if (!file || busy) return;
+        if (file.size > 10 * 1024 * 1024) {
+            status.textContent = "Le fichier dépasse la limite de 10 Mo.";
+            return;
+        }
+        const data = new FormData();
+        data.append("file", file);
+        data.append("specialty", specialtySelect.value);
+        if (activeConversationId) data.append("conversation_id", activeConversationId);
+        const completed = await displayResponse(`Résumer le fichier « ${file.name} »`, () => fetch("/summarize", {
+            method: "POST",
+            body: data,
+        }));
+        if (completed) {
+            documentForm.reset();
+            summarizeButton.disabled = true;
+        }
+    });
 
     setBusy(true);
     try {

@@ -71,6 +71,20 @@ Les contrôles d'export sont désactivés pendant une réponse ou le chargement 
 Le CSV utilise UTF-8 avec BOM et le point-virgule comme séparateur, avec une ligne par message.
 Il conserve les accents, les guillemets et les retours à la ligne ; les cellules pouvant être interprétées comme des formules reçoivent une apostrophe initiale.
 
+## Import et résumé de fichiers
+
+Choisir un fichier dans **Importer un fichier à résumer**, puis cliquer sur **Résumer le fichier**.
+Formats : `.txt`, `.md`, `.csv`, `.pdf` et `.docx`.
+Limites : 10 Mo, 60 000 caractères de texte extrait et 200 pages pour les PDF.
+Les fichiers trop longs sont refusés avec une explication, sans troncature silencieuse.
+Les PDF doivent contenir du texte sélectionnable et ne pas être protégés par mot de passe.
+Les paragraphes et tableaux Word sont analysés ; les textes UTF-8, UTF-16 avec BOM et Windows-1252 sont acceptés.
+
+Le texte extrait est transmis au modèle Groq configuré pour produire un résumé en français.
+Le résumé rejoint la conversation ouverte, ou crée une nouvelle discussion si aucune n'est ouverte.
+Le texte extrait est stocké séparément en base pour permettre les questions suivantes sur le même document ; le fichier binaire n'est pas conservé.
+Les exports contiennent les messages et les résumés affichés, tandis que les documents sources restent dans la base.
+
 ## Vérifications
 
 Les tests utilisent SQLite par défaut et simulent le modèle, sans appel à Groq :

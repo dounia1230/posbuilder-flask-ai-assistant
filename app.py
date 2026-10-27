@@ -16,6 +16,7 @@ from database import (
     close_db, conversations as conversation_table, documents as document_table,
     get_db, get_engine, init_db, messages as message_table, migrate_sqlite, utc_now,
 )
+from documents import DocumentError, extract_document
 
 # Importe la classe du client OpenAI.
 from openai import OpenAI
@@ -42,11 +43,15 @@ app.config["DATABASE"] = os.getenv(
     "DATABASE_PATH", os.path.join(app.instance_path, "chat.sqlite3")
 )
 app.config["DATABASE_URL"] = os.getenv("DATABASE_URL")
+app.config["MAX_CONTENT_LENGTH"] = 11 * 1024 * 1024
 app.teardown_appcontext(close_db)
 with app.app_context():
     init_db()
 
 
+@app.errorhandler(413)
+def file_too_large(error):
+    return jsonify(error="Le fichier dépasse la limite de 10 Mo."), 413
 
 
 @app.cli.command("migrate-sqlite")
@@ -245,6 +250,24 @@ def prompt():
     return respond(messages, data.get("specialty", "general"), data.get("conversation_id"))
 
 
+@app.post('/summarize')
+def summarize_document():
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        return jsonify(error="Choisissez un fichier à résumer."), 400
+    try:
+        document = extract_document(upload)
+    except DocumentError as error:
+        return jsonify(error=str(error)), error.status
+    message = (
+        f"Résume le fichier « {document['filename']} » en français : "
+        "présente le sujet, les points essentiels et une conclusion concise. "
+        "Appuie-toi uniquement sur son contenu et signale les informations manquantes."
+    )
+    return respond(
+        [message], request.form.get("specialty", "general"),
+        request.form.get("conversation_id") or None, document,
+    )
 
 
 def document_context(message, document):

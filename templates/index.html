@@ -82,6 +82,21 @@
 
         <div id="gpt-output" class="flex-1" aria-live="polite"></div>
 
+        <form id="document-form" class="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+            <label for="document-file" class="mb-2 block text-sm font-medium">Importer un fichier à résumer</label>
+            <p id="document-help" class="mb-3 text-sm text-slate-500">
+                TXT, Markdown, CSV, PDF ou Word (.docx). Maximum 10 Mo et 60 000 caractères de texte.
+            </p>
+            <div class="flex flex-wrap items-center gap-3">
+                <input id="document-file" name="file" type="file" required
+                       accept=".txt,.md,.csv,.pdf,.docx" aria-describedby="document-help"
+                       class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm disabled:opacity-50">
+                <button id="summarize-document" type="submit" disabled
+                        class="rounded-xl bg-indigo-600 px-5 py-3 font-medium text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+                    Résumer le fichier
+                </button>
+            </div>
+        </form>
 
         <form id="prompt-form"
               class="sticky bottom-0 mt-6 flex gap-3 bg-slate-50 py-4">
