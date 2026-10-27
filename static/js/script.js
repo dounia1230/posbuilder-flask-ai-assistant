@@ -136,6 +136,16 @@ document.addEventListener("DOMContentLoaded", () => {
     // Récupère le bouton situé dans le formulaire.
     const button = form.querySelector("button");
 
+    const newConversationButton = document.querySelector("#new-conversation");
+    function resetConversation() {
+        if (button.disabled) return;
+        document.querySelector("#gpt-output").replaceChildren();
+        form.reset();
+        form.elements.prompt.focus();
+    }
+    newConversationButton.addEventListener("click", resetConversation);
+
+
     // Exécute cette fonction lors de l’envoi du formulaire.
     // async permet d’utiliser await pour attendre les opérations asynchrones.
     form.addEventListener("submit", async (event) => {
@@ -156,6 +166,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Désactive le bouton pour éviter plusieurs envois simultanés.
         button.disabled = true;
+        newConversationButton.disabled = true;
 
         try {
             // Envoie la conversation à Flask et récupère le lecteur du flux.
@@ -177,6 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } finally {
             // Réactive le bouton après la réussite ou l’échec du traitement.
             button.disabled = false;
+            newConversationButton.disabled = false;
         }
     });
 });
