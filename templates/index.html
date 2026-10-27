@@ -32,6 +32,17 @@
         </header>
 
         <div class="mb-6">
+            <label for="saved-conversations" class="mb-2 block text-sm font-medium">
+                Conversations enregistrées
+            </label>
+            <select id="saved-conversations"
+                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-wait disabled:opacity-50">
+                <option value="">Nouvelle conversation</option>
+            </select>
+            <p id="conversation-status" role="status" class="mt-2 text-sm text-slate-500"></p>
+        </div>
+
+        <div class="mb-6">
             <label for="specialty" class="mb-2 block text-sm font-medium">
                 Spécialité de la conversation
             </label>
@@ -51,6 +62,7 @@
         </div>
 
         <div id="gpt-output" class="flex-1" aria-live="polite"></div>
+
 
         <form id="prompt-form"
               class="sticky bottom-0 mt-6 flex gap-3 bg-slate-50 py-4">

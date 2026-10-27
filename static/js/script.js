@@ -44,29 +44,8 @@ function appendMessage(message) {
     return infoBlock;
 }
 
-// Récupère les messages affichés dans la conversation.
-function getChatHistory() {
-    // Sélectionne les éléments ".message", sauf celui du modèle caché .
-    const infoBlocks = document.querySelectorAll(
-        ".message:not(#chat-template .message)"
-    );
-
-    // Vérifie si aucun message n’a été trouvé.
-    if (!infoBlocks.length) {
-        // Affiche un avertissement dans la console du navigateur.
-        console.warn("Aucun bloc d'information trouvé");
-
-        // Retourne un tableau vide si la conversation ne contient aucun message.
-        return [];
-    }
-
-    // Convertit la liste d’éléments en tableau, puis récupère le HTML de chacun.
-    // Attention : innerHTML récupère aussi les balises HTML. Pour récupérer uniquement le texte, utilise block.textContent.
-    return Array.from(infoBlocks).map(block => block.innerText);
-}
-
-// Envoie la conversation à Flask et retourne un lecteur de la réponse progressive.
-async function fetchPromptResponse(prompt) {
+// Envoie le nouveau message ; Flask récupère l'historique en base de données.
+async function fetchPromptResponse(prompt, conversationId, specialty) {
     // Envoie une requête à la route Flask "/prompt" et attend sa réponse initiale.
     const response = await fetch("/prompt", {
         // Utilise POST pour transmettre les données au serveur.
@@ -77,12 +56,19 @@ async function fetchPromptResponse(prompt) {
             "Content-Type": "application/json",
         },
 
-        // Récupère l’historique et le convertit en texte JSON.
-        body: JSON.stringify({ messages: getChatHistory(), specialty: document.querySelector("#specialty").value }),
+        body: JSON.stringify({
+            messages: [prompt],
+            conversation_id: conversationId,
+            specialty,
+        }),
     });
 
-    // Retourne un lecteur permettant de lire la réponse fragment par fragment.
-    return response.body.getReader();
+    if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || `La requête a échoué (${response.status}).`);
+    }
+
+    return response;
 }
 
 // Lit la réponse progressive et affiche le texte converti en HTML.
@@ -129,7 +115,7 @@ async function readResponseChunks(reader, gptOutput) {
 }
 
 // Attend que le HTML soit chargé avant d’exécuter ce code.
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     // Récupère le formulaire grâce à son identifiant.
     const form = document.querySelector("#prompt-form");
 
@@ -137,62 +123,158 @@ document.addEventListener("DOMContentLoaded", () => {
     const button = form.querySelector("button");
 
     const newConversationButton = document.querySelector("#new-conversation");
+    const specialtySelect = document.querySelector("#specialty");
+    const savedConversations = document.querySelector("#saved-conversations");
+    const status = document.querySelector("#conversation-status");
+    let activeConversationId = null;
+    let busy = false;
+
+    function setActiveConversation(id) {
+        activeConversationId = id;
+        // Seul l'identifiant est retenu dans le navigateur, les messages restent en base.
+        try {
+            if (id) localStorage.setItem("active-conversation", id);
+            else localStorage.removeItem("active-conversation");
+        } catch (error) {
+            console.warn("La conversation ne peut pas être mémorisée dans ce navigateur.", error);
+        }
+    }
+
+    function setBusy(value) {
+        busy = value;
+        button.disabled = busy;
+        newConversationButton.disabled = busy;
+        specialtySelect.disabled = busy;
+        savedConversations.disabled = busy;
+    }
+
+    async function refreshConversations() {
+        const response = await fetch("/conversations");
+        if (!response.ok) throw new Error("Impossible de charger les conversations enregistrées.");
+        const data = await response.json();
+        savedConversations.replaceChildren(new Option("Nouvelle conversation", ""));
+        for (const conversation of data.conversations) {
+            const specialty = Array.from(specialtySelect.options)
+                .find(option => option.value === conversation.specialty)?.textContent || conversation.specialty;
+            savedConversations.add(new Option(`${specialty} — ${conversation.title}`, conversation.id));
+        }
+        savedConversations.value = activeConversationId || "";
+    }
+
+    async function loadConversation(id) {
+        const response = await fetch(`/conversations/${encodeURIComponent(id)}`);
+        if (!response.ok) throw new Error("Impossible d'ouvrir cette conversation.");
+        const conversation = await response.json();
+        document.querySelector("#gpt-output").replaceChildren();
+        const converter = new showdown.Converter();
+        for (const message of conversation.messages) {
+            const output = appendMessage(message.content);
+            if (message.role === "assistant") {
+                output.innerHTML = DOMPurify.sanitize(converter.makeHtml(message.content));
+            }
+        }
+        specialtySelect.value = conversation.specialty;
+        setActiveConversation(conversation.id);
+        savedConversations.value = conversation.id;
+        form.reset();
+        status.textContent = "Conversation chargée. Vous pouvez la continuer.";
+    }
+
+    // Efface l'historique envoyé au modèle et prépare une nouvelle conversation.
     function resetConversation() {
         if (button.disabled) return;
+
+        setActiveConversation(null);
+        savedConversations.value = "";
         document.querySelector("#gpt-output").replaceChildren();
         form.reset();
+        status.textContent = "Les messages seront enregistrés automatiquement.";
         form.elements.prompt.focus();
     }
+
     newConversationButton.addEventListener("click", resetConversation);
-    const specialtySelect = document.querySelector("#specialty");
     specialtySelect.addEventListener("change", resetConversation);
+    savedConversations.addEventListener("change", async () => {
+        if (button.disabled) return;
+        const id = savedConversations.value;
+        if (!id) {
+            resetConversation();
+            return;
+        }
+        setBusy(true);
+        status.textContent = "Chargement de la conversation…";
+        try {
+            await loadConversation(id);
+        } catch (error) {
+            savedConversations.value = activeConversationId || "";
+            status.textContent = error.message;
+        } finally {
+            setBusy(false);
+        }
+    });
 
-
-    // Exécute cette fonction lors de l’envoi du formulaire.
-    // async permet d’utiliser await pour attendre les opérations asynchrones.
-    form.addEventListener("submit", async (event) => {
-        // Empêche l’envoi classique du formulaire et le rechargement de la page.
-        event.preventDefault();
-
-        // Lit la question et retire les espaces au début et à la fin.
-        const prompt = form.elements.prompt.value.trim();
-
-        // Arrête si la question est vide ou si une réponse est déjà en cours.
-        if (!prompt || button.disabled) return;
-
-        // Affiche la question de l’utilisateur dans la conversation.
-        appendMessage(prompt);
-
-        // Remet les champs du formulaire à leurs valeurs initiales.
-        form.reset();
-
-        // Désactive le bouton pour éviter plusieurs envois simultanés.
-        button.disabled = true;
-        newConversationButton.disabled = true;
-        specialtySelect.disabled = true;
+    async function displayResponse(message, fetchResponse) {
+        appendMessage(message);
+        setBusy(true);
+        status.textContent = "Réponse en cours…";
 
         try {
-            // Envoie la conversation à Flask et récupère le lecteur du flux.
-            // Cet appel précède la création du bloc vide pour l’exclure de l’historique.
-            const reader = await fetchPromptResponse(prompt);
+            const response = await fetchResponse();
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || "Impossible de récupérer la réponse.");
+            }
+            setActiveConversation(response.headers.get("X-Conversation-ID"));
+            const reader = response.body.getReader();
 
             // Crée un bloc vide destiné à recevoir la réponse de l’IA.
             const output = appendMessage("");
 
             // Lit et affiche progressivement les fragments de la réponse.
             await readResponseChunks(reader, output);
+            status.textContent = "Conversation enregistrée.";
+            return true;
         } catch (error) {
-            // Affiche un message d’erreur dans la conversation.
-            //Error: unable to retrieve the response.
-            appendMessage("Erreur : impossible de récupérer la réponse.");
-
-            // Affiche les détails de l’erreur dans la console du navigateur.
+            status.textContent = `Erreur : ${error.message}`;
             console.error(error);
+            return false;
         } finally {
-            // Réactive le bouton après la réussite ou l’échec du traitement.
-            button.disabled = false;
-            newConversationButton.disabled = false;
-            specialtySelect.disabled = false;
+            try {
+                await refreshConversations();
+            } catch (error) {
+                status.textContent = error.message;
+            }
+            setBusy(false);
         }
+    }
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const prompt = form.elements.prompt.value.trim();
+        if (!prompt || busy) return;
+        form.reset();
+        await displayResponse(prompt, () => fetchPromptResponse(prompt, activeConversationId, specialtySelect.value));
     });
+
+
+    setBusy(true);
+    try {
+        await refreshConversations();
+        let savedId = null;
+        try {
+            savedId = localStorage.getItem("active-conversation");
+        } catch (error) {
+            console.warn(error);
+        }
+        if (savedId && Array.from(savedConversations.options).some(option => option.value === savedId)) {
+            await loadConversation(savedId);
+        } else {
+            setActiveConversation(null);
+            status.textContent = "Les messages seront enregistrés automatiquement.";
+        }
+    } catch (error) {
+        status.textContent = error.message;
+    } finally {
+        setBusy(false);
+    }
 });
