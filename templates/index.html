@@ -3,114 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FlaskGPT — Assistant IA</title>
-
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='css/output.css') }}">
-    <link rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/styles/default.min.css">
-
+    <meta name="theme-color" content="#f7f7fa">
+    <title>FlaskGPT — Votre espace pour les idées</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/output.css') }}">
     <script defer src="https://cdn.jsdelivr.net/npm/showdown@2.1.0/dist/showdown.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.2.0/highlight.min.js"></script>
     <script defer src="{{ url_for('static', filename='js/script.js') }}"></script>
 </head>
+<body>
+    <a href="#prompt" class="skip-link">Aller à la conversation</a>
+    <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/><path d="m20 2 .6 1.4L22 4l-1.4.6L20 6l-.6-1.4L18 4l1.4-.6Z"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+        <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"/><path d="M8 10h8M8 14h5"/></symbol>
+        <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></symbol>
+        <symbol id="i-document" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Zm0 0v6h6M8 13h8M8 17h5"/></symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m-5 5 5-5 5 5M4 16v4h16v-4"/></symbol>
+        <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6v15m0-15C9 3 5 3 2 4v15c3-1 7-1 10 2m0-15c3-3 7-3 10-2v15c-3-1-7-1-10 2"/></symbol>
+        <symbol id="i-pen" viewBox="0 0 24 24"><path d="m16 3 5 5L8 21H3v-5ZM14 5l5 5"/></symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M7 17 17 7H7m10 0v10"/></symbol>
+        <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+        <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21 11-8.5 8.5a6 6 0 0 1-8.5-8.5L13 2a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol>
+        <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+        <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    </svg>
 
-<body class="bg-slate-50 text-slate-800">
-    <main class="mx-auto flex min-h-screen max-w-4xl flex-col px-4 py-8">
-        <header class="mb-8 flex flex-wrap items-center justify-between gap-4">
-            <div>
-                <h1 class="text-2xl font-bold tracking-tight">FlaskGPT</h1>
-                <p class="mt-1 text-sm text-slate-500">
-                    Your intelligent assistant.
-                </p>
+    <div class="app-shell">
+        <button id="sidebar-backdrop" class="sidebar-backdrop" type="button" aria-label="Fermer le menu" tabindex="-1" hidden></button>
+        <aside id="sidebar" class="sidebar" aria-label="Outils de conversation">
+            <div class="sidebar-header">
+                <a class="brand" href="/" aria-label="FlaskGPT, accueil">
+                    <span class="brand-mark"><svg class="icon"><use href="#i-spark"/></svg></span>
+                    <span>Flask<span class="brand-light">GPT</span><small>Votre partenaire d’idées</small></span>
+                </a>
+                <button id="sidebar-close" class="icon-button mobile-only" type="button" aria-label="Fermer le menu"><svg class="icon"><use href="#i-close"/></svg></button>
             </div>
-            <button id="new-conversation" type="button"
-                    class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:cursor-wait disabled:opacity-50">
-                Nouvelle conversation
-            </button>
-        </header>
 
-        <div class="mb-6">
-            <label for="saved-conversations" class="mb-2 block text-sm font-medium">
-                Conversations enregistrées
-            </label>
-            <select id="saved-conversations"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-wait disabled:opacity-50">
-                <option value="">Nouvelle conversation</option>
-            </select>
-            <div class="mt-3 flex flex-wrap items-end gap-3">
-                <div>
-                    <label for="export-format" class="mb-2 block text-sm font-medium">Format d'export</label>
-                    <select id="export-format"
-                            class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:opacity-50">
-                        <option value="csv">CSV (.csv)</option>
-                        <option value="md">Markdown (.md)</option>
-                        <option value="json">JSON (.json)</option>
+            <div class="sidebar-content">
+                <button id="new-conversation" type="button" class="button button-dark new-conversation">
+                    <svg class="icon"><use href="#i-plus"/></svg>Nouvelle conversation
+                </button>
+
+                <section class="sidebar-section">
+                    <div class="section-heading"><svg class="icon"><use href="#i-chat"/></svg><label for="saved-conversations">Conversations</label><span id="conversation-count" class="count-badge">0</span></div>
+                    <select id="saved-conversations" class="select-control"><option value="">Nouvelle conversation</option></select>
+                    <p class="field-note">Retrouvez le fil de vos idées.</p>
+                </section>
+
+                <section class="sidebar-section specialty-section">
+                    <label for="specialty" class="field-label">Spécialité de l’assistant</label>
+                    <select id="specialty" name="specialty" class="select-control" aria-describedby="specialty-help">
+                        {% for value, specialty in specialties.items() %}
+                        <option value="{{ value }}">{{ specialty.label }}</option>
+                        {% endfor %}
                     </select>
-                </div>
-                <button id="export-conversation" type="button" disabled
-                        class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
-                    Exporter cette conversation
-                </button>
-                <button id="export-all-conversations" type="button" disabled
-                        class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
-                    Tout exporter
-                </button>
+                    <p id="specialty-help" class="field-note">Un nouveau sujet ? Changer de spécialité ouvre une nouvelle conversation.</p>
+                </section>
+
+                <details class="export-panel">
+                    <summary><svg class="icon"><use href="#i-download"/></svg>Exporter les échanges<svg class="icon chevron"><use href="#i-down"/></svg></summary>
+                    <div class="export-content">
+                        <label for="export-format" class="field-label">Format du fichier</label>
+                        <select id="export-format" class="select-control"><option value="csv">CSV (.csv)</option><option value="md">Markdown (.md)</option><option value="json">JSON (.json)</option></select>
+                        <button id="export-conversation" class="button button-secondary" type="button" disabled>Cette conversation<svg class="icon"><use href="#i-download"/></svg></button>
+                        <button id="export-all-conversations" class="button button-text" type="button" disabled>Tout l’historique</button>
+                    </div>
+                </details>
+
+                <form id="document-form" class="document-panel">
+                    <div class="document-panel-heading"><span class="document-icon"><svg class="icon"><use href="#i-document"/></svg></span><h2>Un document à explorer ?</h2></div>
+                    <p>Importez un fichier, gardez l’essentiel.</p>
+                    <label class="file-picker" for="document-file">
+                        <input id="document-file" name="file" type="file" accept=".txt,.md,.csv,.pdf,.docx" aria-describedby="document-help" required>
+                        <svg class="icon"><use href="#i-upload"/></svg>
+                        <strong id="document-name">Choisir un fichier</strong>
+                        <span>PDF, DOCX, TXT, MD, CSV</span>
+                    </label>
+                    <p id="document-help" class="document-limit">10 Mo · 60 000 caractères maximum</p>
+                    <button id="summarize-document" type="submit" class="button button-tinted" disabled><svg class="icon"><use href="#i-spark"/></svg>Résumer le fichier</button>
+                </form>
             </div>
-            <p id="conversation-status" role="status" class="mt-2 text-sm text-slate-500"></p>
-        </div>
+            <div class="sidebar-footer"><span class="status-dot"></span>Historique enregistré automatiquement</div>
+        </aside>
 
-        <div class="mb-6">
-            <label for="specialty" class="mb-2 block text-sm font-medium">
-                Spécialité de la conversation
-            </label>
-            <select id="specialty" name="specialty" aria-describedby="specialty-help"
-                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-wait disabled:opacity-50">
-                {% for value, specialty in specialties.items() %}
-                <option value="{{ value }}">{{ specialty.label }}</option>
-                {% endfor %}
-            </select>
-            <p id="specialty-help" class="mt-2 text-sm text-slate-500">
-                Changer de spécialité démarre une nouvelle conversation.
-            </p>
-        </div>
+        <main class="workspace" id="workspace">
+            <header class="workspace-header">
+                <button id="sidebar-toggle" type="button" class="icon-button mobile-only" aria-controls="sidebar" aria-expanded="false" aria-label="Ouvrir le menu"><svg class="icon"><use href="#i-menu"/></svg></button>
+                <div class="workspace-breadcrumb"><span>Votre espace</span><span aria-hidden="true">/</span><h1 id="conversation-title">Nouvelle conversation</h1></div>
+                <span class="specialty-badge"><svg class="icon"><use href="#i-spark"/></svg><span id="active-specialty">Généraliste</span></span>
+            </header>
 
-        <div id="chat-template" class="hidden mb-4 rounded-2xl border border-slate-200 odd:bg-slate-50 even:bg-white p-5 shadow-xs">
-            <div class="message leading-relaxed break-words"></div>
-        </div>
-
-        <div id="gpt-output" class="flex-1" aria-live="polite"></div>
-
-        <form id="document-form" class="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-            <label for="document-file" class="mb-2 block text-sm font-medium">Importer un fichier à résumer</label>
-            <p id="document-help" class="mb-3 text-sm text-slate-500">
-                TXT, Markdown, CSV, PDF ou Word (.docx). Maximum 10 Mo et 60 000 caractères de texte.
-            </p>
-            <div class="flex flex-wrap items-center gap-3">
-                <input id="document-file" name="file" type="file" required
-                       accept=".txt,.md,.csv,.pdf,.docx" aria-describedby="document-help"
-                       class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm disabled:opacity-50">
-                <button id="summarize-document" type="submit" disabled
-                        class="rounded-xl bg-indigo-600 px-5 py-3 font-medium text-white hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
-                    Résumer le fichier
-                </button>
+            <div id="chat-scroll" class="chat-scroll">
+                <section id="empty-state" class="empty-state" aria-labelledby="welcome-title">
+                    <div class="welcome-content">
+                        <div class="welcome-mark"><svg class="icon"><use href="#i-spark"/></svg><span class="welcome-orbit"></span></div>
+                        <p class="eyebrow">Un espace pour vos idées</p>
+                        <h2 id="welcome-title">Qu’allez-vous explorer<br><span>aujourd’hui ?</span></h2>
+                        <p class="welcome-description">Une question, une idée ou un document.<br>Faisons avancer vos projets, une conversation à la fois.</p>
+                        <div class="suggestions">
+                            <button type="button" class="suggestion-card" data-prompt="Explique-moi simplement un sujet que j’aimerais découvrir : "><span class="suggestion-icon icon-lilac"><svg class="icon"><use href="#i-book"/></svg></span><span><strong>Comprendre un sujet</strong><small>Rendre les choses plus claires</small></span><svg class="icon suggestion-arrow"><use href="#i-arrow"/></svg></button>
+                            <button type="button" class="suggestion-card" data-specialty="writing" data-prompt="Aide-moi à rédiger un texte sur : "><span class="suggestion-icon icon-peach"><svg class="icon"><use href="#i-pen"/></svg></span><span><strong>Trouver les bons mots</strong><small>Écrire, reformuler, imaginer</small></span><svg class="icon suggestion-arrow"><use href="#i-arrow"/></svg></button>
+                            <button id="open-document" type="button" class="suggestion-card"><span class="suggestion-icon icon-mint"><svg class="icon"><use href="#i-document"/></svg></span><span><strong>Résumer un document</strong><small>Aller droit à l’essentiel</small></span><svg class="icon suggestion-arrow"><use href="#i-arrow"/></svg></button>
+                        </div>
+                    </div>
+                </section>
+                <div id="gpt-output" class="chat-output" aria-live="polite" aria-label="Messages de la conversation"></div>
             </div>
-        </form>
 
-        <form id="prompt-form"
-              class="sticky bottom-0 mt-6 flex gap-3 bg-slate-50 py-4">
-            <label for="prompt" class="sr-only">Your message</label>
-
-            <input id="prompt" name="prompt" type="text" required
-                   placeholder="Ask your question…"
-                   class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
-
-            <button type="submit"
-                    class="rounded-xl bg-indigo-600 px-5 py-3 font-medium text-white hover:bg-indigo-700 disabled:cursor-wait disabled:opacity-50">
-                Send
-            </button>
-        </form>
-    </main>
+            <div class="composer-section">
+                <div class="conversation-status-line"><span class="status-dot" aria-hidden="true"></span><p id="conversation-status" role="status">Chargement de votre espace…</p></div>
+                <form id="prompt-form" class="composer">
+                    <label for="prompt" class="sr-only">Votre message</label>
+                    <textarea id="prompt" name="prompt" rows="1" required placeholder="Posez votre question, partagez une idée…" aria-describedby="composer-help"></textarea>
+                    <div class="composer-actions">
+                        <button id="attach-document" type="button" class="attach-button"><svg class="icon"><use href="#i-clip"/></svg><span>Joindre un fichier</span></button>
+                        <button type="submit" class="send-button" aria-label="Envoyer le message"><svg class="icon"><use href="#i-send"/></svg></button>
+                    </div>
+                </form>
+                <p id="composer-help" class="composer-help">Entrée pour envoyer <span>·</span> Maj + Entrée pour une nouvelle ligne</p>
+            </div>
+        </main>
+    </div>
+    <div id="chat-template" class="message-card hidden">
+        <div class="message-avatar" aria-hidden="true">F</div>
+        <div class="message-body"><div class="message-topline"><strong class="message-author">FlaskGPT</strong></div><div class="message"></div></div>
+    </div>
 </body>
 </html>

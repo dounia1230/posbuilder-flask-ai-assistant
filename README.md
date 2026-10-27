@@ -28,6 +28,14 @@ python -m poetry run flask --app app run --port 5001
 
 Ouvrir <http://127.0.0.1:5001>.
 
+## Interface
+
+La barre latérale regroupe l'historique, les spécialités, les exports et les documents.
+Sur mobile, le bouton de menu ouvre ces outils ; Échap ferme le menu et rend le focus au bouton.
+Les suggestions préparent un message que vous pouvez modifier avant l'envoi.
+Dans le champ de saisie, **Entrée** envoie le message et **Maj + Entrée** ajoute une ligne.
+Le bouton **Joindre un fichier** ouvre le sélecteur de documents.
+
 ## Base de données
 
 La variable `DATABASE_URL` active PostgreSQL via SQLAlchemy et Psycopg :
@@ -64,7 +72,7 @@ L'application est prévue pour un usage local : l'historique est commun aux visi
 ## Export des conversations
 
 Choisir **CSV (.csv)** pour un tableur, **Markdown (.md)** pour un document lisible, ou **JSON (.json)** pour les données structurées.
-**Exporter cette conversation** télécharge la discussion ouverte ; **Tout exporter** télécharge tout l'historique dans un seul fichier.
+Dans **Exporter les échanges**, **Cette conversation** télécharge la discussion ouverte et **Tout l'historique** télécharge toutes les discussions dans un seul fichier.
 Les exports contiennent le titre, la spécialité, les dates et les messages dans leur ordre d'origine, avec le Markdown conservé.
 Le format JSON inclut aussi l'identifiant de chaque conversation et la date de chaque message, ainsi qu'une version du format d'export.
 Les contrôles d'export sont désactivés pendant une réponse ou le chargement d'une conversation.
@@ -73,7 +81,7 @@ Il conserve les accents, les guillemets et les retours à la ligne ; les cellule
 
 ## Import et résumé de fichiers
 
-Choisir un fichier dans **Importer un fichier à résumer**, puis cliquer sur **Résumer le fichier**.
+Cliquer sur **Choisir un fichier** dans la barre latérale, puis sur **Résumer le fichier**.
 Formats : `.txt`, `.md`, `.csv`, `.pdf` et `.docx`.
 Limites : 10 Mo, 60 000 caractères de texte extrait et 200 pages pour les PDF.
 Les fichiers trop longs sont refusés avec une explication, sans troncature silencieuse.

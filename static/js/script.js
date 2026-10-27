@@ -1,5 +1,5 @@
 // Crée un nouveau bloc de message à partir du modèle HTML caché.
-function createMessageElement() {
+function createMessageElement(role = "user") {
     // Récupère le conteneur qui affiche les messages de la conversation.
     const output = document.querySelector("#gpt-output");
 
@@ -11,21 +11,25 @@ function createMessageElement() {
 
     // Retire l’identifiant du clone pour éviter les identifiants en double.
     clone.id = "";
+    clone.dataset.role = role;
+    clone.querySelector(".message-author").textContent = role === "user" ? "Vous" : "FlaskGPT";
+    clone.querySelector(".message-avatar").textContent = role === "user" ? "V" : "F";
 
     // Ajoute le nouveau bloc à la fin de la conversation.
     output.appendChild(clone);
 
     // Retire la classe Tailwind "hidden" pour rendre le bloc visible.
     clone.classList.remove("hidden");
+    updateChatVisibility();
 
     // Retourne l’élément qui recevra le texte du message.
     return clone.querySelector(".message");
 }
 
 // Ajoute un message à la conversation et retourne son élément HTML.
-function appendMessage(message) {
+function appendMessage(message, role = "user") {
     // Crée un bloc visible et récupère son élément ".message".
-    const infoBlock = createMessageElement();
+    const infoBlock = createMessageElement(role);
 
     //si _cloneAnswerBlock() retourne null
     // Vérifie que l’élément destiné au message existe.
@@ -39,9 +43,21 @@ function appendMessage(message) {
 
     // Insère le message comme du texte, sans l’interpréter comme du HTML.
     infoBlock.innerText = message;
+    scrollChatToEnd(true);
 
     // Retourne l’élément pour pouvoir modifier son contenu ensuite.
     return infoBlock;
+}
+
+function updateChatVisibility() {
+    document.querySelector("#empty-state").hidden = document.querySelector("#gpt-output").children.length > 0;
+}
+
+function scrollChatToEnd(force = false) {
+    const container = document.querySelector("#chat-scroll");
+    if (force || container.scrollHeight - container.scrollTop - container.clientHeight < 160) {
+        container.scrollTop = container.scrollHeight;
+    }
 }
 
 // Envoie le nouveau message ; Flask récupère l'historique en base de données.
@@ -99,6 +115,7 @@ async function readResponseChunks(reader, gptOutput) {
             gptOutput.innerHTML = DOMPurify.sanitize(
                 converter.makeHtml(text)
             );
+            scrollChatToEnd();
         }
 
         // Termine le décodage des éventuels octets restants.
@@ -108,6 +125,7 @@ async function readResponseChunks(reader, gptOutput) {
         gptOutput.innerHTML = DOMPurify.sanitize(
             converter.makeHtml(text)
         );
+        scrollChatToEnd();
     } finally {
         // Libère le lecteur, même si une erreur survient.
         reader.releaseLock();
@@ -120,7 +138,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const form = document.querySelector("#prompt-form");
 
     // Récupère le bouton situé dans le formulaire.
-    const button = form.querySelector("button");
+    const button = form.querySelector('button[type="submit"]');
 
     const newConversationButton = document.querySelector("#new-conversation");
     const specialtySelect = document.querySelector("#specialty");
@@ -132,9 +150,101 @@ document.addEventListener("DOMContentLoaded", async () => {
     const documentFile = document.querySelector("#document-file");
     const summarizeButton = document.querySelector("#summarize-document");
     const status = document.querySelector("#conversation-status");
+    const sidebar = document.querySelector("#sidebar");
+    const sidebarToggle = document.querySelector("#sidebar-toggle");
+    const sidebarClose = document.querySelector("#sidebar-close");
+    const sidebarBackdrop = document.querySelector("#sidebar-backdrop");
+    const mobileLayout = window.matchMedia("(max-width: 960px)");
+    const attachButton = document.querySelector("#attach-document");
+    const documentShortcut = document.querySelector("#open-document");
     let activeConversationId = null;
     let busy = false;
     let hasSavedConversations = false;
+    let conversationTitles = new Map();
+
+    function updateWorkspaceMeta() {
+        document.querySelector("#conversation-title").textContent = conversationTitles.get(activeConversationId) || "Nouvelle conversation";
+        document.querySelector("#active-specialty").textContent = specialtySelect.selectedOptions[0]?.textContent || "Généraliste";
+    }
+
+    function updateDocumentName() {
+        document.querySelector("#document-name").textContent = documentFile.files[0]?.name || "Choisir un fichier";
+    }
+
+    function setSidebar(open, restoreFocus = true) {
+        const visible = open && mobileLayout.matches;
+        document.body.classList.toggle("sidebar-open", visible);
+        sidebarToggle.setAttribute("aria-expanded", String(visible));
+        sidebarBackdrop.hidden = !visible;
+        sidebar.inert = mobileLayout.matches && !visible;
+        if (mobileLayout.matches) sidebar.setAttribute("aria-hidden", String(!visible));
+        else sidebar.removeAttribute("aria-hidden");
+        if (visible) {
+            sidebar.setAttribute("role", "dialog");
+            sidebar.setAttribute("aria-modal", "true");
+            sidebarClose.focus();
+        } else {
+            sidebar.removeAttribute("role");
+            sidebar.removeAttribute("aria-modal");
+            if (mobileLayout.matches && restoreFocus) sidebarToggle.focus();
+        }
+    }
+
+    sidebarToggle.addEventListener("click", () => setSidebar(true));
+    sidebarClose.addEventListener("click", () => setSidebar(false));
+    sidebarBackdrop.addEventListener("click", () => setSidebar(false));
+    mobileLayout.addEventListener("change", () => setSidebar(false, false));
+    setSidebar(false, false);
+    document.addEventListener("keydown", event => {
+        if (!document.body.classList.contains("sidebar-open")) return;
+        if (event.key === "Escape") {
+            event.preventDefault();
+            setSidebar(false);
+        } else if (event.key === "Tab") {
+            const controls = Array.from(sidebar.querySelectorAll('a[href], button:not(:disabled), select:not(:disabled), input:not(:disabled), summary'))
+                .filter(control => control.getClientRects().length > 0);
+            const first = controls[0];
+            const last = controls[controls.length - 1];
+            if ((event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+                event.preventDefault();
+                (event.shiftKey ? last : first).focus();
+            }
+        }
+    });
+
+    function chooseDocument() {
+        if (busy) return;
+        if (mobileLayout.matches) setSidebar(true);
+        documentFile.click();
+    }
+    attachButton.addEventListener("click", chooseDocument);
+    documentShortcut.addEventListener("click", chooseDocument);
+
+    document.querySelectorAll("[data-prompt]").forEach(suggestion => {
+        suggestion.addEventListener("click", () => {
+            if (busy) return;
+            if (suggestion.dataset.specialty) {
+                specialtySelect.value = suggestion.dataset.specialty;
+                specialtySelect.dispatchEvent(new Event("change"));
+            }
+            form.elements.prompt.value = suggestion.dataset.prompt;
+            form.elements.prompt.dispatchEvent(new Event("input"));
+            form.elements.prompt.focus();
+        });
+    });
+
+    function resizePrompt() {
+        form.elements.prompt.style.height = "auto";
+        form.elements.prompt.style.height = `${Math.min(form.elements.prompt.scrollHeight, 150)}px`;
+    }
+    form.elements.prompt.addEventListener("input", resizePrompt);
+    form.addEventListener("reset", () => requestAnimationFrame(resizePrompt));
+    form.elements.prompt.addEventListener("keydown", event => {
+        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+            event.preventDefault();
+            if (!busy) form.requestSubmit();
+        }
+    });
 
     function updateExportControls() {
         exportFormat.disabled = busy;
@@ -144,6 +254,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function setActiveConversation(id) {
         activeConversationId = id;
+        updateWorkspaceMeta();
         updateExportControls();
         // Seul l'identifiant est retenu dans le navigateur, les messages restent en base.
         try {
@@ -156,12 +267,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     function setBusy(value) {
         busy = value;
+        document.body.classList.toggle("is-busy", busy);
+        document.querySelector("#gpt-output").setAttribute("aria-busy", String(busy));
         button.disabled = busy;
         newConversationButton.disabled = busy;
         specialtySelect.disabled = busy;
         savedConversations.disabled = busy;
         documentFile.disabled = busy;
         summarizeButton.disabled = busy || !documentFile.files.length;
+        attachButton.disabled = busy;
+        documentShortcut.disabled = busy;
+        document.querySelectorAll("[data-prompt]").forEach(suggestion => { suggestion.disabled = busy; });
+        updateDocumentName();
         updateExportControls();
     }
 
@@ -170,6 +287,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (!response.ok) throw new Error("Impossible de charger les conversations enregistrées.");
         const data = await response.json();
         hasSavedConversations = data.conversations.length > 0;
+        conversationTitles = new Map(data.conversations.map(conversation => [conversation.id, conversation.title]));
+        document.querySelector("#conversation-count").textContent = String(data.conversations.length);
         savedConversations.replaceChildren(new Option("Nouvelle conversation", ""));
         for (const conversation of data.conversations) {
             const specialty = Array.from(specialtySelect.options)
@@ -177,6 +296,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             savedConversations.add(new Option(`${specialty} — ${conversation.title}`, conversation.id));
         }
         savedConversations.value = activeConversationId || "";
+        updateWorkspaceMeta();
         updateExportControls();
     }
 
@@ -222,7 +342,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         document.querySelector("#gpt-output").replaceChildren();
         const converter = new showdown.Converter();
         for (const message of conversation.messages) {
-            const output = appendMessage(message.content);
+            const output = appendMessage(message.content, message.role);
             if (message.role === "assistant") {
                 output.innerHTML = DOMPurify.sanitize(converter.makeHtml(message.content));
             }
@@ -232,6 +352,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         savedConversations.value = conversation.id;
         form.reset();
         documentForm.reset();
+        updateChatVisibility();
+        scrollChatToEnd(true);
+        setSidebar(false, false);
         status.textContent = "Conversation chargée. Vous pouvez la continuer.";
     }
 
@@ -245,6 +368,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         form.reset();
         documentForm.reset();
         summarizeButton.disabled = true;
+        updateDocumentName();
+        updateChatVisibility();
+        setSidebar(false, false);
         status.textContent = "Les messages seront enregistrés automatiquement.";
         form.elements.prompt.focus();
     }
@@ -271,6 +397,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     async function displayResponse(message, fetchResponse) {
+        setSidebar(false, false);
         appendMessage(message);
         setBusy(true);
         status.textContent = "Réponse en cours…";
@@ -285,7 +412,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             const reader = response.body.getReader();
 
             // Crée un bloc vide destiné à recevoir la réponse de l’IA.
-            const output = appendMessage("");
+            const output = appendMessage("", "assistant");
 
             // Lit et affiche progressivement les fragments de la réponse.
             await readResponseChunks(reader, output);
@@ -314,6 +441,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     documentFile.addEventListener("change", () => {
+        updateDocumentName();
         summarizeButton.disabled = busy || !documentFile.files.length;
     });
 
@@ -335,6 +463,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }));
         if (completed) {
             documentForm.reset();
+            updateDocumentName();
             summarizeButton.disabled = true;
         }
     });
