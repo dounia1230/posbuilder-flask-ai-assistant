@@ -31,6 +31,21 @@
             </button>
         </header>
 
+        <div class="mb-6">
+            <label for="specialty" class="mb-2 block text-sm font-medium">
+                Spécialité de la conversation
+            </label>
+            <select id="specialty" name="specialty" aria-describedby="specialty-help"
+                    class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-wait disabled:opacity-50">
+                {% for value, specialty in specialties.items() %}
+                <option value="{{ value }}">{{ specialty.label }}</option>
+                {% endfor %}
+            </select>
+            <p id="specialty-help" class="mt-2 text-sm text-slate-500">
+                Changer de spécialité démarre une nouvelle conversation.
+            </p>
+        </div>
+
         <div id="chat-template" class="hidden mb-4 rounded-2xl border border-slate-200 odd:bg-slate-50 even:bg-white p-5 shadow-xs">
             <div class="message leading-relaxed break-words"></div>
         </div>

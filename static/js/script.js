@@ -78,7 +78,7 @@ async function fetchPromptResponse(prompt) {
         },
 
         // Récupère l’historique et le convertit en texte JSON.
-        body: JSON.stringify({ messages: getChatHistory() }),
+        body: JSON.stringify({ messages: getChatHistory(), specialty: document.querySelector("#specialty").value }),
     });
 
     // Retourne un lecteur permettant de lire la réponse fragment par fragment.
@@ -144,6 +144,8 @@ document.addEventListener("DOMContentLoaded", () => {
         form.elements.prompt.focus();
     }
     newConversationButton.addEventListener("click", resetConversation);
+    const specialtySelect = document.querySelector("#specialty");
+    specialtySelect.addEventListener("change", resetConversation);
 
 
     // Exécute cette fonction lors de l’envoi du formulaire.
@@ -167,6 +169,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Désactive le bouton pour éviter plusieurs envois simultanés.
         button.disabled = true;
         newConversationButton.disabled = true;
+        specialtySelect.disabled = true;
 
         try {
             // Envoie la conversation à Flask et récupère le lecteur du flux.
@@ -189,6 +192,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Réactive le bouton après la réussite ou l’échec du traitement.
             button.disabled = false;
             newConversationButton.disabled = false;
+            specialtySelect.disabled = false;
         }
     });
 });

@@ -26,11 +26,41 @@ from flask import Flask, render_template, request, Response
 #__name__ : indique à Flask le module courant, ce qui l’aide à localiser notamment les dossiers templates et static.
 app = Flask(__name__)
 
+# Centralise les choix affichés et les consignes transmises au modèle.
+SPECIALTIES = {
+    "general": {
+        "label": "Généraliste",
+        "instruction": "Tu es un assistant généraliste. Réponds clairement et adapte tes explications aux besoins de l'utilisateur.",
+    },
+    "programming": {
+        "label": "Programmation",
+        "instruction": "Tu es un assistant spécialisé en programmation. Aide à comprendre, écrire et corriger le code avec des exemples et des explications précises.",
+    },
+    "math": {
+        "label": "Mathématiques",
+        "instruction": "Tu es un tuteur en mathématiques. Explique les raisonnements étape par étape et adapte le niveau à l'utilisateur.",
+    },
+    "writing": {
+        "label": "Rédaction",
+        "instruction": "Tu es un assistant en rédaction. Aide à rédiger, corriger et reformuler les textes en respectant le ton, le public et l'objectif demandés.",
+    },
+    "languages": {
+        "label": "Langues",
+        "instruction": "Tu es un tuteur en langues et un assistant de traduction. Explique le vocabulaire et la grammaire, et propose des traductions naturelles adaptées au contexte.",
+    },
+    "marketing": {
+        "label": "Marketing",
+        "instruction": "Tu es un assistant en marketing et communication. Aide à définir le public, les messages et les campagnes avec des propositions concrètes adaptées à l'objectif.",
+    },
+}
+
+
+
 #on met un route en mentionnant la racine comme page d'accueil
 @app.route('/')
 #on crée une fonction, dans un premier temps -> elle affiche juste un message
 def home():
-    return render_template('index.html')
+    return render_template('index.html', specialties=SPECIALTIES)
 
 
 from flask import request, Response, jsonify
@@ -62,7 +92,13 @@ def prompt():
         return jsonify(error="Chaque message doit être un texte non vide."), 400
 
     # Transforme les messages en dictionnaires avec leurs rôles.
-    conversation = build_conversation_dict(messages=messages)
+    specialty = data.get("specialty", "general")
+    if not isinstance(specialty, str) or specialty not in SPECIALTIES:
+        return jsonify(error="Specialite inconnue."), 400
+    conversation = [
+        {"role": "system", "content": SPECIALTIES[specialty]["instruction"]},
+        *build_conversation_dict(messages=messages),
+    ]
 
     # Renvoie progressivement la réponse sous forme de texte brut.
     return Response(
