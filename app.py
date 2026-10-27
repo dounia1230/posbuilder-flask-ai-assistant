@@ -125,6 +125,95 @@ def get_conversation(conversation_id):
     return jsonify(**dict(row), messages=[dict(message) for message in messages])
 
 
+@app.get('/conversations/export')
+@app.get('/conversations/<conversation_id>/export')
+def export_conversations(conversation_id=None):
+    export_format = request.args.get("format", "md")
+    if export_format not in ("md", "json", "csv"):
+        return jsonify(error="Format d'export inconnu. Utilisez md, json ou csv."), 400
+
+    # Une seule lecture conserve l'ordre des échanges et une vue cohérente de la base.
+    query = select(
+        conversation_table,
+        message_table.c.id.label("message_id"), message_table.c.role, message_table.c.content,
+        message_table.c.created_at.label("message_created_at"),
+    ).select_from(conversation_table.outerjoin(message_table))
+    if conversation_id is not None:
+        query = query.where(conversation_table.c.id == conversation_id)
+    query = query.order_by(conversation_table.c.created_at, conversation_table.c.id, message_table.c.id)
+    rows = get_db().execute(query).mappings().all()
+    if conversation_id is not None and not rows:
+        return jsonify(error="Conversation introuvable."), 404
+
+    conversations = {}
+    for row in rows:
+        if row["id"] not in conversations:
+            conversations[row["id"]] = {
+                key: row[key] for key in ("id", "title", "specialty", "created_at", "updated_at")
+            }
+            conversations[row["id"]]["messages"] = []
+        if row["message_id"] is not None:
+            conversations[row["id"]]["messages"].append({
+                "role": row["role"],
+                "content": row["content"],
+                "created_at": row["message_created_at"],
+            })
+
+    exported_at = datetime.now(timezone.utc).isoformat()
+    data = {"version": 1, "exported_at": exported_at, "conversations": list(conversations.values())}
+    if export_format == "json":
+        content = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+        mimetype = "application/json"
+    elif export_format == "csv":
+        output = StringIO(newline="")
+        writer = csv.writer(output, delimiter=";", quoting=csv.QUOTE_ALL)
+        writer.writerow([
+            "conversation_id", "titre", "specialite", "conversation_creee_le",
+            "conversation_modifiee_le", "role", "message", "message_cree_le",
+        ])
+        for conversation in data["conversations"]:
+            for message in conversation["messages"] or [{"role": "", "content": "", "created_at": ""}]:
+                cells = [
+                    conversation["id"], conversation["title"], conversation["specialty"],
+                    conversation["created_at"], conversation["updated_at"],
+                    message["role"], message["content"], message["created_at"],
+                ]
+                # Empêche un tableur d'exécuter une formule contenue dans un message.
+                writer.writerow([
+                    "'" + cell if cell.lstrip().startswith(("=", "+", "-", "@", "\t", "\r", "\n"))
+                    or cell.startswith(("\t", "\r", "\n")) else cell
+                    for cell in cells
+                ])
+        content = output.getvalue()
+        mimetype = "text/csv"
+    else:
+        sections = ["# Conversations FlaskGPT", f"Exporté le {exported_at}"]
+        for conversation in data["conversations"]:
+            specialty = SPECIALTIES.get(conversation["specialty"], {}).get("label", conversation["specialty"])
+            sections.extend([
+                "---",
+                f"## {conversation['title']}",
+                f"Spécialité : {specialty}  \n"
+                f"Créée le : {conversation['created_at']}  \n"
+                f"Modifiée le : {conversation['updated_at']}",
+            ])
+            for message in conversation["messages"]:
+                role = "Utilisateur" if message["role"] == "user" else "Assistant"
+                sections.extend([f"### {role}", message["content"]])
+        if not data["conversations"]:
+            sections.append("Aucune conversation enregistrée.")
+        content = "\n\n".join(sections) + "\n"
+        mimetype = "text/markdown"
+
+    filename = f"conversation-{conversation_id}" if conversation_id else "conversations"
+    response = send_file(
+        BytesIO(content.encode("utf-8-sig" if export_format == "csv" else "utf-8")),
+        mimetype=mimetype,
+        as_attachment=True,
+        download_name=f"{filename}.{export_format}",
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 # Reçoit la conversation envoyée par JavaScript.

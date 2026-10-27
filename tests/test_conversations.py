@@ -163,13 +163,127 @@ class ConversationTests(unittest.TestCase):
     def test_missing_conversation_returns_404(self):
         self.assertEqual(self.client.get("/conversations/missing").status_code, 404)
 
+    def test_export_single_json_preserves_metadata_and_message_order(self):
+        saved_id, _ = self.send("Résous x² = 4", "math", answer="**Réponse** : −2 et 2.")
+        self.send("Pourquoi ?", "math", saved_id, "Car 2² = (−2)² = 4.")
+        self.send("Autre discussion", "writing")
+        original = self.client.get(f"/conversations/{saved_id}").get_json()
+        with patch.object(self.module, "event_stream") as stream:
+            response = self.client.get(f"/conversations/{saved_id}/export?format=json")
+            stream.assert_not_called()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/json")
+        self.assertIn(f"attachment; filename=conversation-{saved_id}.json", response.headers["Content-Disposition"])
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertIn("Résous".encode("utf-8"), response.data)
+        data = response.get_json()
+        self.assertEqual(data["version"], 1)
+        self.assertIn("exported_at", data)
+        self.assertEqual(len(data["conversations"]), 1)
+        exported = data["conversations"][0]
+        for field in ("id", "title", "specialty", "created_at", "updated_at"):
+            self.assertEqual(exported[field], original[field])
+        self.assertEqual(
+            [{"role": message["role"], "content": message["content"]} for message in exported["messages"]],
+            original["messages"],
+        )
+        self.assertTrue(all(message["created_at"] for message in exported["messages"]))
+        self.assertEqual(self.client.get(f"/conversations/{saved_id}").get_json(), original)
+        response.close()
 
+    def test_export_markdown_download_keeps_code_and_accents(self):
+        answer = "Voici le code :\n\n```python\nprint('café')\n```"
+        saved_id, _ = self.send("Un exemple en français", "programming", answer=answer)
+        response = self.client.get(f"/conversations/{saved_id}/export")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "text/markdown")
+        self.assertIn(f"conversation-{saved_id}.md", response.headers["Content-Disposition"])
+        text = response.get_data(as_text=True)
+        self.assertIn("Spécialité : Programmation", text)
+        self.assertIn("Un exemple en français", text)
+        self.assertIn(answer, text)
+        self.assertLess(text.index("### Utilisateur"), text.index("### Assistant"))
+        response.close()
 
+    def test_export_all_conversations_in_both_formats(self):
+        first, _ = self.send("Première discussion", "math", answer="Réponse mathématique")
+        second, _ = self.send("Deuxième discussion", "languages", answer="Réponse linguistique")
+        response = self.client.get("/conversations/export?format=json")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("filename=conversations.json", response.headers["Content-Disposition"])
+        conversations = response.get_json()["conversations"]
+        self.assertEqual([conversation["id"] for conversation in conversations], [first, second])
+        self.assertEqual(conversations[0]["messages"][-1]["content"], "Réponse mathématique")
+        self.assertEqual(conversations[1]["messages"][-1]["content"], "Réponse linguistique")
+        response.close()
+        response = self.client.get("/conversations/export?format=md")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("filename=conversations.md", response.headers["Content-Disposition"])
+        text = response.get_data(as_text=True)
+        for content in ("Première discussion", "Deuxième discussion", "Mathématiques", "Langues"):
+            self.assertIn(content, text)
+        response.close()
 
+    def test_export_empty_history(self):
+        response = self.client.get("/conversations/export?format=json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["conversations"], [])
+        response.close()
+        response = self.client.get("/conversations/export?format=md")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Aucune conversation enregistrée.", response.get_data(as_text=True))
+        response.close()
 
+    def test_export_invalid_format_or_missing_conversation(self):
+        saved_id, _ = self.send()
+        for path, status in (
+            ("/conversations/export?format=pdf", 400),
+            (f"/conversations/{saved_id}/export?format=pdf", 400),
+            ("/conversations/missing/export?format=json", 404),
+            ("/conversations/missing/export?format=md", 404),
+        ):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, status)
+                self.assertIn("error", response.get_json())
+                self.assertNotIn("Content-Disposition", response.headers)
 
+    def test_csv_export_preserves_unicode_quotes_and_multiline_messages(self):
+        question = 'Explique "café" ; puis\nla suite'
+        answer = 'Une réponse ; avec "guillemets"\net une seconde ligne.'
+        saved_id, _ = self.send(question, "languages", answer=answer)
+        response = self.client.get(f"/conversations/{saved_id}/export?format=csv")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "text/csv")
+        self.assertIn(f"conversation-{saved_id}.csv", response.headers["Content-Disposition"])
+        self.assertTrue(response.data.startswith(b"\xef\xbb\xbf"))
+        rows = list(csv.DictReader(StringIO(response.data.decode("utf-8-sig")), delimiter=";"))
+        self.assertEqual([row["role"] for row in rows], ["user", "assistant"])
+        self.assertEqual([row["message"] for row in rows], [question, answer])
+        self.assertTrue(all(row["conversation_id"] == saved_id for row in rows))
+        response.close()
 
+    def test_csv_export_all_and_empty_history(self):
+        response = self.client.get("/conversations/export?format=csv")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(csv.DictReader(StringIO(response.data.decode("utf-8-sig")), delimiter=";")), [])
+        response.close()
+        first, _ = self.send()
+        second, _ = self.send("Autre conversation")
+        response = self.client.get("/conversations/export?format=csv")
+        rows = list(csv.DictReader(StringIO(response.data.decode("utf-8-sig")), delimiter=";"))
+        self.assertEqual({row["conversation_id"] for row in rows}, {first, second})
+        self.assertEqual(len(rows), 4)
+        response.close()
 
+    def test_csv_neutralizes_spreadsheet_formulas(self):
+        for text in ('=HYPERLINK("https://example.com")', ' +SUM(1;2)', '-2+3', '@SUM(1;2)', '\tformule'):
+            with self.subTest(text=text):
+                saved_id, _ = self.send(text)
+                response = self.client.get(f"/conversations/{saved_id}/export?format=csv")
+                rows = list(csv.DictReader(StringIO(response.data.decode("utf-8-sig")), delimiter=";"))
+                self.assertEqual(rows[0]["message"], "'" + text)
+                response.close()
 
 
 

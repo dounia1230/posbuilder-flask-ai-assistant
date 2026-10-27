@@ -39,6 +39,25 @@
                     class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-wait disabled:opacity-50">
                 <option value="">Nouvelle conversation</option>
             </select>
+            <div class="mt-3 flex flex-wrap items-end gap-3">
+                <div>
+                    <label for="export-format" class="mb-2 block text-sm font-medium">Format d'export</label>
+                    <select id="export-format"
+                            class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:opacity-50">
+                        <option value="csv">CSV (.csv)</option>
+                        <option value="md">Markdown (.md)</option>
+                        <option value="json">JSON (.json)</option>
+                    </select>
+                </div>
+                <button id="export-conversation" type="button" disabled
+                        class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+                    Exporter cette conversation
+                </button>
+                <button id="export-all-conversations" type="button" disabled
+                        class="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50">
+                    Tout exporter
+                </button>
+            </div>
             <p id="conversation-status" role="status" class="mt-2 text-sm text-slate-500"></p>
         </div>
 

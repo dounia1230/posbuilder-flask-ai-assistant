@@ -1,6 +1,6 @@
 # FlaskGPT
 
-Assistant Flask avec réponses progressives, choix de spécialité, historique PostgreSQL.
+Assistant Flask avec réponses progressives, choix de spécialité, historique PostgreSQL, exports et résumés de documents.
 
 ## Démarrage
 
@@ -61,8 +61,25 @@ La conversation active est restaurée au rechargement si le navigateur autorise 
 
 L'application est prévue pour un usage local : l'historique est commun aux visiteurs de cette instance, sans gestion de comptes.
 
-## Tests
+## Export des conversations
+
+Choisir **CSV (.csv)** pour un tableur, **Markdown (.md)** pour un document lisible, ou **JSON (.json)** pour les données structurées.
+**Exporter cette conversation** télécharge la discussion ouverte ; **Tout exporter** télécharge tout l'historique dans un seul fichier.
+Les exports contiennent le titre, la spécialité, les dates et les messages dans leur ordre d'origine, avec le Markdown conservé.
+Le format JSON inclut aussi l'identifiant de chaque conversation et la date de chaque message, ainsi qu'une version du format d'export.
+Les contrôles d'export sont désactivés pendant une réponse ou le chargement d'une conversation.
+Le CSV utilise UTF-8 avec BOM et le point-virgule comme séparateur, avec une ligne par message.
+Il conserve les accents, les guillemets et les retours à la ligne ; les cellules pouvant être interprétées comme des formules reçoivent une apostrophe initiale.
+
+## Vérifications
+
+Les tests utilisent SQLite par défaut et simulent le modèle, sans appel à Groq :
 
 ```powershell
-python -m unittest discover -s tests -v
+python -m poetry run python -m unittest discover -s tests -v
+node --check static/js/script.js
+npm run build:css
 ```
+
+Pour lancer la même suite contre PostgreSQL, définir `TEST_DATABASE_URL` avec une base de test existante et dédiée dont le nom se termine par `_test`.
+La suite recrée ses tables avant chaque test ; elle n'utilise pas la base applicative configurée dans `.env`.

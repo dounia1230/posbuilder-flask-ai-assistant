@@ -125,12 +125,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     const newConversationButton = document.querySelector("#new-conversation");
     const specialtySelect = document.querySelector("#specialty");
     const savedConversations = document.querySelector("#saved-conversations");
+    const exportFormat = document.querySelector("#export-format");
+    const exportButton = document.querySelector("#export-conversation");
+    const exportAllButton = document.querySelector("#export-all-conversations");
     const status = document.querySelector("#conversation-status");
     let activeConversationId = null;
     let busy = false;
+    let hasSavedConversations = false;
+
+    function updateExportControls() {
+        exportFormat.disabled = busy;
+        exportButton.disabled = busy || !activeConversationId;
+        exportAllButton.disabled = busy || !hasSavedConversations;
+    }
 
     function setActiveConversation(id) {
         activeConversationId = id;
+        updateExportControls();
         // Seul l'identifiant est retenu dans le navigateur, les messages restent en base.
         try {
             if (id) localStorage.setItem("active-conversation", id);
@@ -146,12 +157,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         newConversationButton.disabled = busy;
         specialtySelect.disabled = busy;
         savedConversations.disabled = busy;
+        updateExportControls();
     }
 
     async function refreshConversations() {
         const response = await fetch("/conversations");
         if (!response.ok) throw new Error("Impossible de charger les conversations enregistrées.");
         const data = await response.json();
+        hasSavedConversations = data.conversations.length > 0;
         savedConversations.replaceChildren(new Option("Nouvelle conversation", ""));
         for (const conversation of data.conversations) {
             const specialty = Array.from(specialtySelect.options)
@@ -159,7 +172,43 @@ document.addEventListener("DOMContentLoaded", async () => {
             savedConversations.add(new Option(`${specialty} — ${conversation.title}`, conversation.id));
         }
         savedConversations.value = activeConversationId || "";
+        updateExportControls();
     }
+
+    async function downloadExport(allConversations) {
+        if (busy || (allConversations ? !hasSavedConversations : !activeConversationId)) return;
+        const format = exportFormat.value;
+        const id = activeConversationId;
+        const path = allConversations ? "/conversations/export" : `/conversations/${encodeURIComponent(id)}/export`;
+        setBusy(true);
+        status.textContent = "Préparation de l'export…";
+        try {
+            const response = await fetch(`${path}?format=${encodeURIComponent(format)}`);
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || "Impossible d'exporter les conversations.");
+            }
+            const url = URL.createObjectURL(await response.blob());
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `${allConversations ? "conversations" : `conversation-${id}`}.${format}`;
+            document.body.appendChild(link);
+            try {
+                link.click();
+            } finally {
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+            status.textContent = "Export prêt : téléchargement lancé.";
+        } catch (error) {
+            status.textContent = `Erreur : ${error.message}`;
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    exportButton.addEventListener("click", () => downloadExport(false));
+    exportAllButton.addEventListener("click", () => downloadExport(true));
 
     async function loadConversation(id) {
         const response = await fetch(`/conversations/${encodeURIComponent(id)}`);
